@@ -1,74 +1,94 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:pixabay_flut/models/response_model.dart';
-import 'package:pixabay_flut/repo/photo_repository.dart';
-import 'package:pixabay_flut/widgets/image_list.dart';
+import 'package:pixabay_flut/blocs/images_bloc.dart';
+import 'package:pixabay_flut/blocs/images_provider.dart';
 
-class ImageList extends StatefulWidget {
-  final List<ResponseModel> models;
-
-  ImageList({Key key, this.models}) : super(key: key);
-
+class ImageList extends StatelessWidget {
   @override
-  _ImageListState createState() => new _ImageListState();
+  Widget build(BuildContext context) {
+    final bloc = ImagesProvider.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("pixabay"),
+      ),
+      body: ListBuilder(bloc: bloc),
+    );
+  }
 }
 
-class _ImageListState extends State<ImageList> {
-  List<ResponseModel> models;
+class ListBuilder extends StatefulWidget {
+  final ImagesBloc bloc;
+
+  ListBuilder({this.bloc});
+
+  @override
+  _ListBuilderState createState() => _ListBuilderState(bloc: bloc);
+}
+
+class _ListBuilderState extends State<ListBuilder> {
+  final ImagesBloc bloc;
+
+  _ListBuilderState({this.bloc});
+
+  int pageNumber = 1;
   ScrollController _scrollController = new ScrollController();
-  bool isPerformingRequest = false;
-  int currentPage = 1;
 
   @override
   void initState() {
-    this.models = widget.models;
-
+    bloc.fetchImages(pageNumber);
     _scrollController.addListener(() {
       if (_scrollController.position.pixels ==
           _scrollController.position.maxScrollExtent) {
-        currentPage++;
-        new PhotoRepository().fetchPhotos(currentPage).then((newList) {
-          setState(() {
-            currentPage;
-            models.addAll(newList);
-            print("current: $currentPage");
-          });
-        });
+        pageNumber++;
+        bloc.fetchImages(pageNumber);
       }
     });
+
     super.initState();
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    bloc.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return buildListView(models, _scrollController);
+    return buildList(bloc, _scrollController);
   }
 }
 
-Widget buildListView(
-    List<ResponseModel> models, ScrollController scrollController) {
-  return new Container(
-    child: ListView.builder(
-        controller: scrollController,
-        itemCount: models.length,
-        itemBuilder: (context, int index) {
-          return ListTile(
-            title: new Container(
-              child: Column(
-                children: <Widget>[
-                  Image.network(models[index].webformatURL),
-                  Text("image: ${index + 1}"),
-                ],
-              ),
-            ),
-          );
-        }),
+Widget buildList(ImagesBloc bloc, ScrollController scrollController) {
+  return StreamBuilder(
+    stream: bloc.imagesStream,
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return Center(
+          child: CircularProgressIndicator(),
+        );
+      }
+
+      return ListView.builder(
+          controller: scrollController,
+          itemCount: snapshot.data.length,
+          itemBuilder: (context, index) {
+            return buildListTile(snapshot.data, index);
+          });
+    },
+  );
+}
+
+Widget buildListTile(data, int index) {
+  return ListTile(
+    title: new Container(
+      child: Column(
+        children: <Widget>[
+          Image.network(data[index].webformatURL),
+          Text("image: ${index + 1}"),
+        ],
+      ),
+    ),
   );
 }
